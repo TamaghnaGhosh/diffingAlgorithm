@@ -97,3 +97,6 @@ The final `render()` call starts the app by performing its initial mount.
 | --- | --- |
 | `diffingAlgorithm.html` | HTML page, virtual DOM implementation, diffing logic, and counter app |
 | `README.md` | Project overview and code explanation |
+
+## -------------------------------------------------------------------------------------------------------------------------------------------------------------
+
