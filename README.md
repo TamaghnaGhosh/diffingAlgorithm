@@ -98,7 +98,7 @@ The final `render()` call starts the app by performing its initial mount.
 | `diffingAlgorithm.html` | HTML page, virtual DOM implementation, diffing logic, and counter app |
 | `README.md` | Project overview and code explanation |
 
-## -----------------------------------------------------------------------------
+## React's Virtual DOM + Diffing algorithm written using plain JavaScript
 
 Absolutely. This code is a **small version of React's Virtual DOM + Diffing algorithm** written using plain JavaScript.
 
