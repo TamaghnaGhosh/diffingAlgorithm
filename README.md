@@ -98,5 +98,1436 @@ The final `render()` call starts the app by performing its initial mount.
 | `diffingAlgorithm.html` | HTML page, virtual DOM implementation, diffing logic, and counter app |
 | `README.md` | Project overview and code explanation |
 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
+
+Absolutely. This code is a **small version of React's Virtual DOM + Diffing algorithm** written using plain JavaScript.
+
+The easiest way to understand it is:
+
+> **Virtual DOM = JavaScript object describing the UI**  
+> **Real DOM = Actual HTML elements in the browser**  
+> **Diffing = Compare old Virtual DOM with new Virtual DOM and update only what changed**
+
+Let's go step by step.
+
+---
+
+# 1. The overall flow
+
+When you click `+`, this happens:
+
+```text
+Click +
+   ↓
+count++
+   ↓
+render()
+   ↓
+Create NEW Virtual DOM tree
+   ↓
+Compare OLD Virtual DOM vs NEW Virtual DOM
+   ↓
+Find what changed
+   ↓
+Update only that DOM element
+```
+
+For example:
+
+Initially:
+
+```text
+Counter: 0
+```
+
+After clicking `+`:
+
+```text
+Counter: 1
+```
+
+The algorithm doesn't recreate the whole page.
+
+It finds:
+
+```text
+"Counter: 0"
+        ↓
+"Counter: 1"
+```
+
+and updates only that text.
+
+---
+
+# 2. `h()` — Creating a Virtual DOM node
+
+```js
+function h(type, props, ...children) {
+  return {
+    type,
+    props: {
+      ...props,
+      children: children.flat()
+    }
+  };
+}
+```
+
+This function creates a **JavaScript object representing an HTML element**.
+
+For example:
+
+```js
+h("h1", {}, "Hello")
+```
+
+creates:
+
+```js
+{
+  type: "h1",
+  props: {
+    children: ["Hello"]
+  }
+}
+```
+
+So instead of immediately creating:
+
+```html
+<h1>Hello</h1>
+```
+
+we first create a JavaScript object describing it.
+
+That's our **Virtual DOM node**.
+
+---
+
+## Example
+
+This:
+
+```js
+h(
+  "button",
+  {
+    onClick: () => console.log("clicked")
+  },
+  "+"
+)
+```
+
+becomes approximately:
+
+```js
+{
+  type: "button",
+
+  props: {
+    onClick: function() {...},
+    children: ["+"]
+  }
+}
+```
+
+So:
+
+```text
+h()
+ ↓
+JavaScript object
+ ↓
+Virtual DOM
+```
+
+---
+
+# 3. `createDOMElement()` — Virtual DOM → Real DOM
+
+Now we need to convert our JavaScript object into an actual browser element.
+
+```js
+function createDOMElement(vNode) {
+```
+
+`vNode` means **Virtual DOM Node**.
+
+---
+
+## Step 1: Check if it is text
+
+```js
+if (typeof vNode === "string") {
+  return document.createTextNode(vNode);
+}
+```
+
+For example:
+
+```js
+"Counter: 0"
+```
+
+is just text.
+
+So:
+
+```js
+document.createTextNode("Counter: 0")
+```
+
+creates a real DOM text node.
+
+---
+
+# 4. Create the HTML element
+
+If it isn't text:
+
+```js
+const el = document.createElement(vNode.type);
+```
+
+Suppose:
+
+```js
+vNode.type === "button"
+```
+
+Then:
+
+```js
+document.createElement("button")
+```
+
+creates:
+
+```html
+<button></button>
+```
+
+---
+
+# 5. Add attributes
+
+This part:
+
+```js
+if (vNode.props) {
+  for (const [key, value] of Object.entries(vNode.props)) {
+```
+
+loops through the properties.
+
+For example:
+
+```js
+{
+  class: "app"
+}
+```
+
+Then:
+
+```js
+el.setAttribute(key, value);
+```
+
+does:
+
+```html
+<div class="app"></div>
+```
+
+---
+
+# 6. Special handling for events
+
+There is this:
+
+```js
+if (key.startsWith("on")) {
+```
+
+Why?
+
+Because:
+
+```js
+onClick
+```
+
+is an event handler, not a normal HTML attribute.
+
+So:
+
+```js
+el.addEventListener(
+  key.slice(2).toLowerCase(),
+  value
+);
+```
+
+For:
+
+```js
+onClick
+```
+
+this:
+
+```js
+key.slice(2)
+```
+
+removes `"on"`:
+
+```text
+onClick
+  ↓
+Click
+  ↓
+click
+```
+
+So it becomes:
+
+```js
+el.addEventListener("click", value);
+```
+
+---
+
+# 7. Create the children
+
+This part:
+
+```js
+if (vNode.props?.children) {
+  vNode.props.children.forEach((child) =>
+    el.appendChild(createDOMElement(child))
+  );
+}
+```
+
+means:
+
+> For every child in the Virtual DOM, create a real DOM element and add it.
+
+For example:
+
+```js
+h("h1", {}, "Counter: 0")
+```
+
+becomes:
+
+```text
+h1
+ └── "Counter: 0"
+```
+
+Then:
+
+```js
+createDOMElement(...)
+```
+
+creates:
+
+```html
+<h1>Counter: 0</h1>
+```
+
+---
+
+# 8. Now let's look at the actual application
+
+You have:
+
+```js
+let count = 0;
+```
+
+So initially:
+
+```text
+count = 0
+```
+
+Then:
+
+```js
+render();
+```
+
+runs.
+
+---
+
+# 9. `render()` creates the Virtual DOM
+
+Inside `render()`:
+
+```js
+const tree = h(
+  "div",
+  { class: "app" },
+```
+
+This creates:
+
+```html
+<div class="app">
+```
+
+Then it has:
+
+```js
+h("h1", {}, "Counter: " + count)
+```
+
+Since:
+
+```js
+count = 0
+```
+
+this becomes:
+
+```text
+Counter: 0
+```
+
+So:
+
+```html
+<h1>Counter: 0</h1>
+```
+
+---
+
+# 10. The first button
+
+```js
+h(
+  "button",
+  {
+    onClick: () => {
+      count++;
+      render();
+    },
+  },
+  "+",
+)
+```
+
+This means:
+
+```html
+<button>+</button>
+```
+
+When the button is clicked:
+
+```js
+count++;
+```
+
+So:
+
+```text
+0 → 1
+```
+
+Then:
+
+```js
+render();
+```
+
+runs again.
+
+---
+
+# 11. The second button
+
+```js
+h(
+  "button",
+  {
+    onClick: () => {
+      count--;
+      if (count < 0) count = 0;
+      render();
+    },
+  },
+  "−",
+)
+```
+
+This creates:
+
+```html
+<button>−</button>
+```
+
+Clicking it does:
+
+```text
+count--
+```
+
+But this prevents negative values:
+
+```js
+if (count < 0) count = 0;
+```
+
+---
+
+# 12. What does the Virtual DOM tree look like?
+
+Initially, roughly:
+
+```text
+div.app
+│
+├── h1
+│   └── "Counter: 0"
+│
+├── button
+│   └── "+"
+│
+└── button
+    └── "−"
+```
+
+This is just JavaScript objects.
+
+The browser eventually gets:
+
+```html
+<div class="app">
+  <h1>Counter: 0</h1>
+  <button>+</button>
+  <button>−</button>
+</div>
+```
+
+---
+
+# 13. First render
+
+This part handles the first render:
+
+```js
+if (!render.prev) {
+```
+
+At the beginning:
+
+```js
+render.prev
+```
+
+doesn't exist.
+
+So we enter here:
+
+```js
+render.prev = tree;
+```
+
+We save the current Virtual DOM tree.
+
+Think:
+
+```text
+render.prev = OLD Virtual DOM
+```
+
+Then:
+
+```js
+render.prev.el = createDOMElement(tree);
+```
+
+We convert the Virtual DOM into real DOM.
+
+Then:
+
+```js
+document.body.appendChild(render.prev.el);
+```
+
+puts it into the webpage.
+
+So:
+
+```text
+Virtual DOM
+     ↓
+createDOMElement()
+     ↓
+Real DOM
+     ↓
+document.body
+```
+
+---
+
+# 14. What happens when you click `+`?
+
+Initially:
+
+```text
+count = 0
+```
+
+Virtual DOM:
+
+```text
+<h1>Counter: 0</h1>
+```
+
+Click `+`.
+
+This runs:
+
+```js
+count++;
+```
+
+Now:
+
+```text
+count = 1
+```
+
+Then:
+
+```js
+render();
+```
+
+creates a **new Virtual DOM**.
+
+Now it contains:
+
+```text
+<h1>Counter: 1</h1>
+```
+
+So now we have:
+
+### Old Virtual DOM
+
+```text
+<h1>Counter: 0</h1>
+```
+
+### New Virtual DOM
+
+```text
+<h1>Counter: 1</h1>
+```
+
+Now we need to compare them.
+
+That's what `diff()` does.
+
+---
+
+# 15. `diff()` — The most important part
+
+```js
+function diff(oldVNode, newVNode, parentEl, index)
+```
+
+Think of it as:
+
+> **Compare the old UI with the new UI and make the real DOM match the new UI.**
+
+---
+
+# 16. Find the existing DOM element
+
+```js
+const oldEl =
+  index === undefined
+    ? oldVNode.el
+    : parentEl.childNodes[index];
+```
+
+Basically:
+
+> Find the real DOM element corresponding to the old Virtual DOM node.
+
+For example:
+
+```text
+Old Virtual DOM
+      ↓
+<h1>Counter: 0</h1>
+      ↓
+Real DOM
+      ↓
+<h1>Counter: 0</h1>
+```
+
+---
+
+# 17. Check whether nodes are text
+
+```js
+const oldIsText = typeof oldVNode === "string";
+const newIsText = typeof newVNode === "string";
+```
+
+For example:
+
+```js
+"Counter: 0"
+```
+
+is text.
+
+So:
+
+```js
+oldIsText = true
+```
+
+---
+
+# 18. Check if the element type changed
+
+This is very important:
+
+```js
+if (
+  oldIsText !== newIsText ||
+  (!oldIsText && oldVNode.type !== newVNode.type)
+)
+```
+
+Suppose old node:
+
+```js
+h("div", {}, ...)
+```
+
+and new node:
+
+```js
+h("section", {}, ...)
+```
+
+The types are different:
+
+```text
+div
+ ↓
+section
+```
+
+So instead of trying to modify the `<div>` into `<section>`, we simply replace it.
+
+```js
+const newEl = createDOMElement(newVNode);
+
+parentEl.replaceChild(newEl, oldEl);
+```
+
+---
+
+# 19. Text node update
+
+Now imagine:
+
+```text
+Old:
+"Counter: 0"
+
+New:
+"Counter: 1"
+```
+
+Both are text.
+
+So this condition is false:
+
+```js
+if (oldIsText !== newIsText ...)
+```
+
+Then:
+
+```js
+if (oldIsText) {
+  if (oldVNode !== newVNode)
+    oldEl.textContent = newVNode;
+
+  return;
+}
+```
+
+It sees:
+
+```text
+"Counter: 0" !== "Counter: 1"
+```
+
+So it does:
+
+```js
+oldEl.textContent = "Counter: 1";
+```
+
+That's the actual update in the browser.
+
+**It doesn't recreate the `<h1>`.**
+
+Only the text changes.
+
+---
+
+# 20. This is the core idea of diffing
+
+Before:
+
+```html
+<h1>Counter: 0</h1>
+```
+
+After:
+
+```html
+<h1>Counter: 1</h1>
+```
+
+Instead of:
+
+```text
+Delete entire h1
+Create new h1
+```
+
+we do:
+
+```text
+Find h1
+   ↓
+Find text
+   ↓
+Change "0" → "1"
+```
+
+That's the basic idea behind Virtual DOM diffing.
+
+---
+
+# 21. What is `newVNode.el = oldEl`?
+
+```js
+newVNode.el = oldEl;
+```
+
+This connects the new Virtual DOM node to the existing real DOM element.
+
+Think:
+
+```text
+New Virtual DOM
+      │
+      │ .el
+      ↓
+Existing DOM element
+```
+
+So the algorithm knows:
+
+> "This new Virtual DOM node corresponds to this existing browser element."
+
+---
+
+# 22. Updating attributes
+
+Next:
+
+```js
+const oldProps = oldVNode.props || {};
+const newProps = newVNode.props || {};
+```
+
+Suppose:
+
+```text
+OLD:
+class="red"
+
+NEW:
+class="blue"
+```
+
+The algorithm compares them.
+
+First it looks for removed properties:
+
+```js
+for (const key of Object.keys(oldProps)) {
+```
+
+If something existed before but doesn't exist now:
+
+```js
+if (!(key in newProps))
+```
+
+remove it:
+
+```js
+oldEl.removeAttribute(key);
+```
+
+---
+
+# 23. Updating new properties
+
+Then:
+
+```js
+for (const [key, value] of Object.entries(newProps)) {
+```
+
+It loops through the new properties.
+
+For normal attributes:
+
+```js
+oldEl.setAttribute(key, value);
+```
+
+For events:
+
+```js
+oldEl.removeEventListener(...)
+oldEl.addEventListener(...)
+```
+
+This is important because every `render()` creates new arrow functions:
+
+```js
+onClick: () => {
+  count++;
+  render();
+}
+```
+
+So the old event listener needs to be removed and the new one attached.
+
+---
+
+# 24. Now comes children reconciliation
+
+This is another important section:
+
+```js
+const oldChildren = oldProps.children || [];
+const newChildren = newProps.children || [];
+```
+
+For example:
+
+### Old
+
+```text
+div
+├── h1 "Counter: 0"
+├── button "+"
+└── button "−"
+```
+
+### New
+
+```text
+div
+├── h1 "Counter: 1"
+├── button "+"
+└── button "−"
+```
+
+The algorithm compares these children one by one.
+
+---
+
+# 25. Compare children at the same position
+
+```js
+const sharedLength =
+  Math.min(oldChildren.length, newChildren.length);
+```
+
+Both have 3 children:
+
+```text
+old = 3
+new = 3
+
+sharedLength = 3
+```
+
+Then:
+
+```js
+for (let i = 0; i < sharedLength; i++) {
+  diff(oldChildren[i], newChildren[i], oldEl, i);
+}
+```
+
+So:
+
+```text
+Child 0 → compare
+Child 1 → compare
+Child 2 → compare
+```
+
+---
+
+# 26. What happens to child 0?
+
+Old:
+
+```text
+<h1>Counter: 0</h1>
+```
+
+New:
+
+```text
+<h1>Counter: 1</h1>
+```
+
+`diff()` is called again.
+
+It sees:
+
+```text
+h1 → h1
+```
+
+Same type.
+
+So it doesn't replace the `<h1>`.
+
+Then it compares the children:
+
+```text
+"Counter: 0"
+        ↓
+"Counter: 1"
+```
+
+Then:
+
+```js
+oldEl.textContent = newVNode;
+```
+
+Done.
+
+---
+
+# 27. What about the buttons?
+
+Old:
+
+```text
+<button>+</button>
+```
+
+New:
+
+```text
+<button>+</button>
+```
+
+Same type.
+
+The button itself stays.
+
+Its event handler gets updated.
+
+Same thing for:
+
+```text
+<button>−</button>
+```
+
+---
+
+# 28. Removing children
+
+This part:
+
+```js
+for (
+  let i = oldChildren.length - 1;
+  i >= newChildren.length;
+  i--
+) {
+  oldEl.removeChild(oldEl.childNodes[i]);
+}
+```
+
+handles when the new Virtual DOM has **fewer children**.
+
+Example:
+
+```text
+Old:
+div
+├── A
+├── B
+└── C
+
+New:
+div
+├── A
+└── B
+```
+
+The algorithm removes:
+
+```text
+C
+```
+
+from the real DOM.
+
+---
+
+# 29. Adding children
+
+This part:
+
+```js
+for (
+  let i = sharedLength;
+  i < newChildren.length;
+  i++
+) {
+  oldEl.appendChild(
+    createDOMElement(newChildren[i])
+  );
+}
+```
+
+handles new children.
+
+Example:
+
+```text
+Old:
+div
+├── A
+└── B
+
+New:
+div
+├── A
+├── B
+└── C
+```
+
+It creates:
+
+```html
+C
+```
+
+and appends it.
+
+---
+
+# 30. Finally update `render.prev`
+
+At the end:
+
+```js
+render.prev = tree;
+```
+
+This is very important.
+
+It means:
+
+> The new Virtual DOM becomes the old Virtual DOM for the next render.
+
+So:
+
+```text
+Before click:
+
+render.prev
+    ↓
+Counter: 0
+```
+
+After click:
+
+```text
+render.prev
+    ↓
+Counter: 1
+```
+
+Then if you click again:
+
+```text
+Counter: 1
+       ↓
+Counter: 2
+```
+
+The algorithm always compares:
+
+```text
+previous render
+      VS
+current render
+```
+
+---
+
+# 31. Complete example: clicking `+`
+
+Let's follow the entire process.
+
+### Initial state
+
+```js
+count = 0
+```
+
+`render()`:
+
+```text
+Virtual DOM:
+
+div
+├── h1 "Counter: 0"
+├── button "+"
+└── button "−"
+```
+
+Real DOM:
+
+```html
+<div class="app">
+  <h1>Counter: 0</h1>
+  <button>+</button>
+  <button>−</button>
+</div>
+```
+
+---
+
+### User clicks `+`
+
+Event handler:
+
+```js
+count++;
+```
+
+Now:
+
+```text
+count = 1
+```
+
+Then:
+
+```js
+render();
+```
+
+New Virtual DOM:
+
+```text
+div
+├── h1 "Counter: 1"
+├── button "+"
+└── button "−"
+```
+
+---
+
+### `diff()` compares
+
+```text
+OLD                         NEW
+
+div                         div
+├── h1                      ├── h1
+│   └── Counter: 0          │   └── Counter: 1
+├── button +                ├── button +
+└── button −                └── button −
+```
+
+It sees:
+
+```text
+div = div       → keep
+h1 = h1         → keep
+text changed    → update
+button = button → keep
+button = button → keep
+```
+
+So the browser only changes:
+
+```text
+Counter: 0
+     ↓
+Counter: 1
+```
+
+---
+
+# 32. Why is this called "Diffing"?
+
+Because we're calculating the **difference** between:
+
+```text
+OLD UI
+```
+
+and:
+
+```text
+NEW UI
+```
+
+For example:
+
+```text
+OLD:
+Counter: 0
+
+NEW:
+Counter: 1
+```
+
+Difference:
+
+```text
+0 → 1
+```
+
+Then we apply only that change to the real DOM.
+
+---
+
+# 33. One important limitation of this implementation
+
+This is a **simplified diffing algorithm**, not React's full implementation.
+
+For example, it compares children by their **position**:
+
+```text
+old child 0 ↔ new child 0
+old child 1 ↔ new child 1
+old child 2 ↔ new child 2
+```
+
+It doesn't have React's `key` mechanism.
+
+Suppose:
+
+```text
+Old:
+A
+B
+C
+```
+
+New:
+
+```text
+C
+A
+B
+```
+
+This implementation doesn't intelligently understand that the items moved.
+
+It mostly sees:
+
+```text
+A → C
+B → A
+C → B
+```
+
+and updates them.
+
+Real frameworks use more sophisticated reconciliation strategies.
+
+---
+
+# 34. The entire code in one simple picture
+
+```text
+                    render()
+                       │
+                       ▼
+              Create Virtual DOM
+                       │
+              ┌────────┴────────┐
+              │                 │
+         First render       Later render
+              │                 │
+              ▼                 ▼
+      createDOMElement()       diff()
+              │                 │
+              ▼                 ▼
+          Real DOM       Compare old/new
+                                │
+                       ┌────────┼────────┐
+                       │        │        │
+                    Replace   Update   Add/remove
+                    element   props    children
+                       │        │        │
+                       └────────┼────────┘
+                                ▼
+                           Updated DOM
+```
+
+---
+
+# 35. The 5 functions you should remember
+
+If you're explaining this in an interview, remember these five concepts:
+
+| Function | Simple meaning |
+|---|---|
+| `h()` | Creates a Virtual DOM object |
+| `createDOMElement()` | Converts Virtual DOM → Real DOM |
+| `render()` | Creates the UI and starts the update process |
+| `diff()` | Compares old and new Virtual DOM |
+| `createDOMElement()` during diff | Creates new DOM when needed |
+
+And the most important concept:
+
+> **We don't blindly rebuild the entire DOM on every state change. We create a new Virtual DOM, compare it with the previous Virtual DOM, and update only the parts that changed.**
+
+### Interview-friendly answer
+
+> "This code implements a simplified Virtual DOM. The `h()` function creates JavaScript objects representing HTML elements. On the first render, `createDOMElement()` converts those objects into real DOM nodes. When state changes, `render()` creates a new Virtual DOM tree. The `diff()` function compares the old and new trees, checks element types, attributes, text, and children, and updates only the changed parts of the real DOM. After that, the new tree becomes the previous tree for the next comparison."
 
