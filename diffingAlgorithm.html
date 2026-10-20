@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <h1>Diffing Algorithm</h1>
+    <script>
+      // ─── Virtual DOM Node Factory ───────────────────────────────────
+      function h(type, props, ...children) {
+        return { type, props: { ...props, children: children.flat() } };
+      }
+
+      // ─── createDOMElement (initial mount) ───────────────────────────
+      function createDOMElement(vNode) {
+        if (typeof vNode === "string") {
+          return document.createTextNode(vNode);
+        }
+
+        const el = document.createElement(vNode.type);
+
+        if (vNode.props) {
+          for (const [key, value] of Object.entries(vNode.props)) {
+            if (key === "children") continue;
+            if (key.startsWith("on")) {
+              el.addEventListener(key.slice(2).toLowerCase(), value);
+            } else {
+              el.setAttribute(key, value);
+            }
+          }
+        }
+
+        if (vNode.props?.children) {
+          vNode.props.children.forEach((child) =>
+            el.appendChild(createDOMElement(child)),
+          );
+        }
+
+        return el;
+      }
+
+      // ─── diff (patch existing DOM) ──────────────────────────────────
+      function diff(oldVNode, newVNode, parentEl, index) {
+        const oldEl =
+          index === undefined ? oldVNode.el : parentEl.childNodes[index];
+        const oldIsText = typeof oldVNode === "string";
+        const newIsText = typeof newVNode === "string";
+
+        // Replace nodes when their kinds or element types differ.
+        if (
+          oldIsText !== newIsText ||
+          (!oldIsText && oldVNode.type !== newVNode.type)
+        ) {
+          const newEl = createDOMElement(newVNode);
+          parentEl.replaceChild(newEl, oldEl);
+          if (index === undefined) newVNode.el = newEl;
+          return;
+        }
+
+        if (oldIsText) {
+          if (oldVNode !== newVNode) oldEl.textContent = newVNode;
+          return;
+        }
+
+        newVNode.el = oldEl;
+
+        // Update attributes
+        const oldProps = oldVNode.props || {};
+        const newProps = newVNode.props || {};
+
+        for (const key of Object.keys(oldProps)) {
+          if (key === "children") continue;
+          if (!(key in newProps)) {
+            if (key.startsWith("on")) {
+              oldEl.removeEventListener(
+                key.slice(2).toLowerCase(),
+                oldProps[key],
+              );
+            } else {
+              oldEl.removeAttribute(key);
+            }
+          }
+        }
+
+        for (const [key, value] of Object.entries(newProps)) {
+          if (key === "children") continue;
+          if (key.startsWith("on")) {
+            if (oldProps[key]) {
+              oldEl.removeEventListener(
+                key.slice(2).toLowerCase(),
+                oldProps[key],
+              );
+            }
+            oldEl.addEventListener(key.slice(2).toLowerCase(), value);
+          } else {
+            oldEl.setAttribute(key, value);
+          }
+        }
+
+        // Reconcile shared children, then remove or append any remaining nodes.
+        const oldChildren = oldProps.children || [];
+        const newChildren = newProps.children || [];
+
+        const sharedLength = Math.min(oldChildren.length, newChildren.length);
+        for (let i = 0; i < sharedLength; i++) {
+          diff(oldChildren[i], newChildren[i], oldEl, i);
+        }
+        for (let i = oldChildren.length - 1; i >= newChildren.length; i--) {
+          oldEl.removeChild(oldEl.childNodes[i]);
+        }
+        for (let i = sharedLength; i < newChildren.length; i++) {
+          oldEl.appendChild(createDOMElement(newChildren[i]));
+        }
+      }
+
+      // ─── App ────────────────────────────────────────────────────────
+      let count = 0;
+
+      function render() {
+        const tree = h(
+          "div",
+          { class: "app" },
+          h("h1", {}, "Counter: " + count),
+          h(
+            "button",
+            {
+              onClick: () => {
+                count++;
+                render();
+              },
+            },
+            "+",
+          ),
+          h(
+            "button",
+            {
+              onClick: () => {
+                count--;
+                if (count < 0) count = 0;
+                render();
+              },
+            },
+            "−",
+          ),
+        );
+
+        if (!render.prev) {
+          // First render: full mount
+          render.prev = tree;
+          render.prev.el = createDOMElement(tree);
+          document.body.appendChild(render.prev.el);
+        } else {
+          // Subsequent renders: diff & patch
+          diff(render.prev, tree, render.prev.el.parentNode);
+          render.prev = tree;
+        }
+      }
+
+      render(); // initial mount
+    </script>
+  </body>
+</html>
